@@ -33,6 +33,9 @@ export default function RoomPage() {
   const [status, setStatus] = useState("Waiting for host...");
   const [showToast, setShowToast] = useState(false);
 
+  // ✅ Mobile detection (viewer-only)
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
   /* ---------------------------
      Peer Creation
   ---------------------------- */
@@ -74,7 +77,6 @@ export default function RoomPage() {
     const handleSignal = async (signal) => {
       const peer = getPeer();
 
-      // STREAM ENDED
       if (signal.streamEnded) {
         videoRef.current.srcObject = null;
         peerRef.current?.close();
@@ -84,7 +86,6 @@ export default function RoomPage() {
         return;
       }
 
-      // OFFER
       if (signal.offer) {
         if (peer.signalingState !== "stable") return;
 
@@ -101,7 +102,6 @@ export default function RoomPage() {
         });
       }
 
-      // ANSWER
       if (signal.answer) {
         if (peer.signalingState !== "have-local-offer") return;
 
@@ -110,7 +110,6 @@ export default function RoomPage() {
         );
       }
 
-      // ICE
       if (signal.candidate) {
         try {
           await peer.addIceCandidate(
@@ -121,7 +120,6 @@ export default function RoomPage() {
     };
 
     socket.on("signal", handleSignal);
-
     return () => socket.off("signal", handleSignal);
   }, [roomId]);
 
@@ -226,17 +224,32 @@ export default function RoomPage() {
 
       {/* Status */}
       <div className="absolute top-8 text-xs uppercase tracking-wide text-gray-400">
-        {isHost ? "Host" : "Viewer"} · {status}
+        {isMobile ? "Viewer · Mobile" : isHost ? "Host · Desktop" : "Viewer"} · {status}
       </div>
 
       {/* Screen */}
-      <div className="w-full max-w-6xl px-6">
-        <div className="aspect-video rounded-3xl bg-black/40 border border-white/10 overflow-hidden flex items-center justify-center">
-          {status === "Waiting for host..." && (
+      <div className="w-full max-w-6xl px-6 relative">
+        <div className="aspect-video rounded-3xl bg-black/40 border border-white/10 overflow-hidden flex items-center justify-center relative">
+
+          {/* Viewer-only mobile overlay */}
+          {isMobile && !isSharing && status === "Waiting for host..." && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-10">
+              <div className="text-center max-w-xs px-6">
+                <p className="text-sm text-gray-300 mb-2">Viewing mode</p>
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  Screen sharing is available on desktop browsers.
+                  Join from a desktop to host and share your screen.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {status === "Waiting for host..." && !isMobile && (
             <div className="absolute text-gray-400 text-sm">
               Waiting for host to start sharing…
             </div>
           )}
+
           <video
             ref={videoRef}
             autoPlay
@@ -249,7 +262,7 @@ export default function RoomPage() {
 
       {/* Controls */}
       <div className="fixed bottom-10 flex gap-2 bg-black/60 p-2 rounded-2xl border border-white/10 backdrop-blur">
-        {!isSharing && (
+        {!isSharing && !isMobile && (
           <button
             onClick={startShare}
             className="px-6 py-3 bg-primary text-black font-semibold rounded-xl flex items-center gap-2"
@@ -269,11 +282,17 @@ export default function RoomPage() {
           </button>
         )}
 
-        <button onClick={copyLink} className="w-12 h-12 rounded-xl hover:bg-white/10 flex items-center justify-center">
+        <button
+          onClick={copyLink}
+          className="w-12 h-12 rounded-xl hover:bg-white/10 flex items-center justify-center"
+        >
           <Copy size={18} />
         </button>
 
-        <button onClick={leaveRoom} className="w-12 h-12 rounded-xl hover:bg-red-500/10 text-red-400 flex items-center justify-center">
+        <button
+          onClick={leaveRoom}
+          className="w-12 h-12 rounded-xl hover:bg-red-500/10 text-red-400 flex items-center justify-center"
+        >
           <LogOut size={18} />
         </button>
       </div>

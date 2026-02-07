@@ -42,7 +42,7 @@ const Navbar = () => {
           <div className="hidden md:flex items-center gap-8">
             <NavLink to="/about">About</NavLink>
             <NavLink to="/docs">Docs</NavLink>
-            <NavLink to="https://github.com" external>GitHub</NavLink>
+            <NavLink to="https://github.com/Piyush64-bit/QUICKSCREEN" external>GitHub</NavLink>
           </div>
 
           <div className="flex items-center gap-4">
