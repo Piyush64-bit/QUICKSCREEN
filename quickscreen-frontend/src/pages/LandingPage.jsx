@@ -47,7 +47,7 @@ const LandingPage = () => {
         >
           <span className="flex w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse" />
           <span className="text-[10px] font-bold tracking-widest uppercase text-gray-400">
-            v2.0 Now Live
+            Instant P2P Sharing
           </span>
         </motion.div>
 
