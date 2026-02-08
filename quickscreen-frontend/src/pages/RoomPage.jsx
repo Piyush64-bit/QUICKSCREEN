@@ -33,6 +33,9 @@ export default function RoomPage() {
   const [status, setStatus] = useState("Waiting for host...");
   const [showToast, setShowToast] = useState(false);
 
+  // ✅ added
+  const [hasRemoteStream, setHasRemoteStream] = useState(false);
+
   // ✅ Mobile detection (viewer-only)
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
@@ -56,6 +59,7 @@ export default function RoomPage() {
 
     peer.ontrack = (e) => {
       videoRef.current.srcObject = e.streams[0];
+      setHasRemoteStream(true); // ✅ added
       setStatus("Live");
     };
 
@@ -81,6 +85,7 @@ export default function RoomPage() {
         videoRef.current.srcObject = null;
         peerRef.current?.close();
         peerRef.current = null;
+        setHasRemoteStream(false); // ✅ added
         setStatus("Waiting for host...");
         setIsSharing(false);
         return;
@@ -231,8 +236,8 @@ export default function RoomPage() {
       <div className="w-full max-w-6xl px-6 relative">
         <div className="aspect-video rounded-3xl bg-black/40 border border-white/10 overflow-hidden flex items-center justify-center relative">
 
-          {/* Viewer-only mobile overlay */}
-          {isMobile && !isSharing && status === "Waiting for host..." && (
+          {/* Viewer-only mobile overlay (fixed) */}
+          {isMobile && !hasRemoteStream && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-10">
               <div className="text-center max-w-xs px-6">
                 <p className="text-sm text-gray-300 mb-2">Viewing mode</p>
