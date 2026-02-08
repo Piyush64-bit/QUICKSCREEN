@@ -2,7 +2,6 @@
 
 **Instant Peer-to-Peer Screen Sharing**
 
-[View Live Demo](#) · [Report Bug](#) · [Request Feature](#)
 
 ---
 
