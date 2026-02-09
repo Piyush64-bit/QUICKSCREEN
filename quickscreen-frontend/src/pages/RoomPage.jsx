@@ -32,16 +32,9 @@ export default function RoomPage() {
   const [isHost, setIsHost] = useState(false);
   const [status, setStatus] = useState("Waiting for host...");
   const [showToast, setShowToast] = useState(false);
-
-  // ✅ added
   const [hasRemoteStream, setHasRemoteStream] = useState(false);
 
-  // ✅ Mobile detection (viewer-only)
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-  /* ---------------------------
-     Peer Creation
-  ---------------------------- */
 
   const getPeer = () => {
     if (peerRef.current) return peerRef.current;
@@ -59,21 +52,13 @@ export default function RoomPage() {
 
     peer.ontrack = (e) => {
       videoRef.current.srcObject = e.streams[0];
-      setHasRemoteStream(true); // ✅ added
+      setHasRemoteStream(true);
       setStatus("Live");
-    };
-
-    peer.oniceconnectionstatechange = () => {
-      console.log("ICE:", peer.iceConnectionState);
     };
 
     peerRef.current = peer;
     return peer;
   };
-
-  /* ---------------------------
-     Signaling
-  ---------------------------- */
 
   useEffect(() => {
     socket.emit("join-room", roomId);
@@ -85,7 +70,7 @@ export default function RoomPage() {
         videoRef.current.srcObject = null;
         peerRef.current?.close();
         peerRef.current = null;
-        setHasRemoteStream(false); // ✅ added
+        setHasRemoteStream(false);
         setStatus("Waiting for host...");
         setIsSharing(false);
         return;
@@ -124,13 +109,28 @@ export default function RoomPage() {
       }
     };
 
-    socket.on("signal", handleSignal);
-    return () => socket.off("signal", handleSignal);
-  }, [roomId]);
+    // 🔥 ADDED — late join fix
+    const handleViewerJoined = async () => {
+      if (!isHost || !isSharing) return;
 
-  /* ---------------------------
-     Start Sharing (HOST)
-  ---------------------------- */
+      const peer = getPeer();
+      const offer = await peer.createOffer();
+      await peer.setLocalDescription(offer);
+
+      socket.emit("signal", {
+        roomId,
+        signal: { offer }
+      });
+    };
+
+    socket.on("signal", handleSignal);
+    socket.on("viewer-joined", handleViewerJoined);
+
+    return () => {
+      socket.off("signal", handleSignal);
+      socket.off("viewer-joined", handleViewerJoined);
+    };
+  }, [roomId, isHost, isSharing]);
 
   const startShare = async () => {
     try {
@@ -178,10 +178,6 @@ export default function RoomPage() {
     }
   };
 
-  /* ---------------------------
-     Stop Sharing
-  ---------------------------- */
-
   const stopShare = () => {
     streamRef.current?.getTracks().forEach(track => track.stop());
 
@@ -200,10 +196,6 @@ export default function RoomPage() {
     setStatus("Waiting for host...");
   };
 
-  /* ---------------------------
-     Helpers
-  ---------------------------- */
-
   const copyLink = async () => {
     await navigator.clipboard.writeText(window.location.href);
     setShowToast(true);
@@ -215,10 +207,6 @@ export default function RoomPage() {
     navigate("/");
   };
 
-  /* ---------------------------
-     UI
-  ---------------------------- */
-
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -227,16 +215,13 @@ export default function RoomPage() {
     >
       <Toast message="Link copied" isVisible={showToast} />
 
-      {/* Status */}
       <div className="absolute top-8 text-xs uppercase tracking-wide text-gray-400">
         {isMobile ? "Viewer · Mobile" : isHost ? "Host · Desktop" : "Viewer"} · {status}
       </div>
 
-      {/* Screen */}
       <div className="w-full max-w-6xl px-6 relative">
         <div className="aspect-video rounded-3xl bg-black/40 border border-white/10 overflow-hidden flex items-center justify-center relative">
 
-          {/* Viewer-only mobile overlay (fixed) */}
           {isMobile && !hasRemoteStream && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-10">
               <div className="text-center max-w-xs px-6">
@@ -265,7 +250,6 @@ export default function RoomPage() {
         </div>
       </div>
 
-      {/* Controls */}
       <div className="fixed bottom-10 flex gap-2 bg-black/60 p-2 rounded-2xl border border-white/10 backdrop-blur">
         {!isSharing && !isMobile && (
           <button

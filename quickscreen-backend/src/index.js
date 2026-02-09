@@ -73,7 +73,8 @@ app.get("/docs", (req, res) => {
       socket_events: {
         "join-room": "Join a room with roomId",
         "signal": "Exchange WebRTC signaling data",
-        "peer-joined": "Emitted when a new user joins a room"
+        "peer-joined": "Emitted when a new peer joins",
+        "viewer-joined": "Emitted to host when a viewer joins (late-join fix)"
       }
     }
   });
@@ -93,8 +94,11 @@ io.on("connection", (socket) => {
     socket.join(roomId);
     console.log(`User ${socket.id} joined room ${roomId}`);
 
-    // 🔥 Notify others that a peer joined
+    // 🔥 Notify others (existing)
     socket.to(roomId).emit("peer-joined");
+
+    // 🔥 Notify host explicitly for late-join re-offer (added)
+    socket.to(roomId).emit("viewer-joined");
   });
 
   // Relay WebRTC signals
