@@ -15,31 +15,47 @@ const iceConfig = {
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
     {
-      urls: "turn:global.relay.metered.ca:80",
+      urls: [
+        "turn:global.relay.metered.ca:80",
+        "turn:global.relay.metered.ca:3478",
+        "turn:global.relay.metered.ca:443",
+      ],
       username: import.meta.env.VITE_TURN_USERNAME,
-      credential: import.meta.env.VITE_TURN_PASSWORD
+      credential: import.meta.env.VITE_TURN_PASSWORD,
     },
     {
-      urls: "turn:global.relay.metered.ca:80?transport=tcp",
+      urls: [
+        "turn:global.relay.metered.ca:80?transport=tcp",
+        "turn:global.relay.metered.ca:3478?transport=tcp",
+        "turn:global.relay.metered.ca:443?transport=tcp",
+      ],
       username: import.meta.env.VITE_TURN_USERNAME,
-      credential: import.meta.env.VITE_TURN_PASSWORD
+      credential: import.meta.env.VITE_TURN_PASSWORD,
     },
-    {
-      urls: "turn:global.relay.metered.ca:443",
-      username: import.meta.env.VITE_TURN_USERNAME,
-      credential: import.meta.env.VITE_TURN_PASSWORD
-    }
   ],
-  iceCandidatePoolSize: 10
+  iceCandidatePoolSize: 10,
+  iceTransportPolicy: "all",
 };
 
 // Debug logger
 const log = {
-  i: (msg, data) => console.log(`🔵 ${msg}`, data || ''),
-  s: (msg, data) => console.log(`✅ ${msg}`, data || ''),
-  e: (msg, data) => console.error(`🔴 ${msg}`, data || ''),
-  w: (msg, data) => console.warn(`⚠️ ${msg}`, data || ''),
+  i: (msg, data) => console.log(`🔵 ${msg}`, data || ""),
+  s: (msg, data) => console.log(`✅ ${msg}`, data || ""),
+  e: (msg, data) => console.error(`🔴 ${msg}`, data || ""),
+  w: (msg, data) => console.warn(`⚠️ ${msg}`, data || ""),
 };
+
+// Diagnostic Check
+if (
+  !import.meta.env.VITE_TURN_USERNAME ||
+  !import.meta.env.VITE_TURN_PASSWORD
+) {
+  log.w(
+    "WebRTC: TURN credentials missing in ENV - relaying will fail across networks!",
+  );
+} else {
+  log.s("WebRTC: TURN credentials found.");
+}
 
 export default function RoomPage() {
   const { roomId } = useParams();
@@ -59,7 +75,7 @@ export default function RoomPage() {
   const [debugInfo, setDebugInfo] = useState({
     conn: "new",
     ice: "new",
-    socket: false
+    socket: false,
   });
 
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -76,18 +92,18 @@ export default function RoomPage() {
     // Monitor connection states
     peer.onconnectionstatechange = () => {
       log.i(`Connection: ${peer.connectionState}`);
-      setDebugInfo(prev => ({ ...prev, conn: peer.connectionState }));
-      
+      setDebugInfo((prev) => ({ ...prev, conn: peer.connectionState }));
+
       if (peer.connectionState === "connected") {
         log.s("Peer CONNECTED!");
         setStatus("Live");
       }
-      
+
       if (peer.connectionState === "failed") {
         log.e("Connection FAILED - restarting ICE");
         peer.restartIce();
       }
-      
+
       if (peer.connectionState === "disconnected") {
         log.w("Disconnected");
         setStatus("Reconnecting...");
@@ -96,8 +112,8 @@ export default function RoomPage() {
 
     peer.oniceconnectionstatechange = () => {
       log.i(`ICE: ${peer.iceConnectionState}`);
-      setDebugInfo(prev => ({ ...prev, ice: peer.iceConnectionState }));
-      
+      setDebugInfo((prev) => ({ ...prev, ice: peer.iceConnectionState }));
+
       if (peer.iceConnectionState === "failed") {
         log.e("ICE FAILED");
       }
@@ -112,7 +128,7 @@ export default function RoomPage() {
         log.i("Sending ICE candidate", e.candidate.type);
         socket.emit("signal", {
           roomId,
-          signal: { candidate: e.candidate }
+          signal: { candidate: e.candidate },
         });
       } else {
         log.s("ICE gathering complete");
@@ -121,15 +137,15 @@ export default function RoomPage() {
 
     peer.ontrack = (e) => {
       log.s("Track received!", e.track.kind);
-      
+
       if (videoRef.current && e.streams[0]) {
         videoRef.current.srcObject = e.streams[0];
         setHasRemoteStream(true);
         setStatus("Live");
         log.s("Stream attached to video");
-        
+
         // Force video to play
-        videoRef.current.play().catch(err => {
+        videoRef.current.play().catch((err) => {
           log.e("Video play error", err);
         });
       }
@@ -150,22 +166,22 @@ export default function RoomPage() {
     // Monitor socket
     const onConnect = () => {
       log.s("Socket connected", socket.id);
-      setDebugInfo(prev => ({ ...prev, socket: true }));
+      setDebugInfo((prev) => ({ ...prev, socket: true }));
     };
-    
+
     const onDisconnect = () => {
       log.e("Socket disconnected");
-      setDebugInfo(prev => ({ ...prev, socket: false }));
+      setDebugInfo((prev) => ({ ...prev, socket: false }));
     };
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
-    
+
     if (socket.connected) onConnect();
 
     const handleSignal = async (signal) => {
       log.i("Signal received", Object.keys(signal));
-      
+
       const peer = getPeer();
 
       // Host stopped sharing
@@ -184,14 +200,16 @@ export default function RoomPage() {
       // Handle offer (viewer receives this)
       if (signal.offer) {
         log.i("Processing offer");
-        
+
         if (peer.signalingState !== "stable") {
           log.w(`Cannot process offer - state: ${peer.signalingState}`);
           return;
         }
 
         try {
-          await peer.setRemoteDescription(new RTCSessionDescription(signal.offer));
+          await peer.setRemoteDescription(
+            new RTCSessionDescription(signal.offer),
+          );
           log.s("Remote description set");
 
           // Process any pending candidates
@@ -211,7 +229,7 @@ export default function RoomPage() {
 
           socket.emit("signal", {
             roomId,
-            signal: { answer }
+            signal: { answer },
           });
           log.i("Answer sent");
         } catch (err) {
@@ -222,14 +240,16 @@ export default function RoomPage() {
       // Handle answer (host receives this)
       if (signal.answer) {
         log.i("Processing answer");
-        
+
         if (peer.signalingState !== "have-local-offer") {
           log.w(`Cannot process answer - state: ${peer.signalingState}`);
           return;
         }
 
         try {
-          await peer.setRemoteDescription(new RTCSessionDescription(signal.answer));
+          await peer.setRemoteDescription(
+            new RTCSessionDescription(signal.answer),
+          );
           log.s("Answer set");
 
           // Process pending candidates
@@ -250,7 +270,7 @@ export default function RoomPage() {
       // Handle ICE candidate
       if (signal.candidate) {
         log.i("ICE candidate received");
-        
+
         if (!peer.remoteDescription) {
           log.w("No remote description yet - queuing candidate");
           pendingCandidatesRef.current.push(signal.candidate);
@@ -268,14 +288,14 @@ export default function RoomPage() {
 
     const handleViewerJoined = async () => {
       log.i("Viewer joined");
-      
+
       if (!isHost || !isSharing) {
         log.w("Not hosting - ignoring", { isHost, isSharing });
         return;
       }
 
       const peer = getPeer();
-      
+
       try {
         const offer = await peer.createOffer();
         await peer.setLocalDescription(offer);
@@ -283,7 +303,7 @@ export default function RoomPage() {
 
         socket.emit("signal", {
           roomId,
-          signal: { offer }
+          signal: { offer },
         });
         log.i("Offer sent to viewer");
       } catch (err) {
@@ -305,7 +325,7 @@ export default function RoomPage() {
 
   const startShare = async () => {
     log.i("Starting screen share");
-    
+
     try {
       setIsHost(true);
 
@@ -313,13 +333,13 @@ export default function RoomPage() {
         video: {
           frameRate: { ideal: 60, max: 60 },
           width: { max: 1920 },
-          height: { max: 1080 }
+          height: { max: 1080 },
         },
-        audio: false
+        audio: false,
       });
 
       log.s("Stream captured", {
-        tracks: stream.getTracks().length
+        tracks: stream.getTracks().length,
       });
 
       streamRef.current = stream;
@@ -329,7 +349,7 @@ export default function RoomPage() {
 
       const peer = getPeer();
 
-      stream.getTracks().forEach(track => {
+      stream.getTracks().forEach((track) => {
         log.i(`Adding ${track.kind} track`);
         const sender = peer.addTrack(track, stream);
 
@@ -348,7 +368,7 @@ export default function RoomPage() {
 
       socket.emit("signal", {
         roomId,
-        signal: { offer }
+        signal: { offer },
       });
 
       setIsSharing(true);
@@ -367,15 +387,15 @@ export default function RoomPage() {
 
   const stopShare = () => {
     log.i("Stopping share");
-    
-    streamRef.current?.getTracks().forEach(track => {
+
+    streamRef.current?.getTracks().forEach((track) => {
       track.stop();
       log.i(`Stopped ${track.kind} track`);
     });
 
     socket.emit("signal", {
       roomId,
-      signal: { streamEnded: true }
+      signal: { streamEnded: true },
     });
 
     peerRef.current?.close();
@@ -403,17 +423,19 @@ export default function RoomPage() {
   };
 
   const getStatusColor = (state) => {
-    if (state === 'connected') return 'text-green-400';
-    if (state === 'failed' || state === 'disconnected') return 'text-red-400';
-    if (state === 'connecting' || state === 'checking') return 'text-yellow-400';
-    return 'text-gray-400';
+    if (state === "connected") return "text-green-400";
+    if (state === "failed" || state === "disconnected") return "text-red-400";
+    if (state === "connecting" || state === "checking")
+      return "text-yellow-400";
+    return "text-gray-400";
   };
 
   const getStatusDot = (state) => {
-    if (state === 'connected') return 'bg-green-500';
-    if (state === 'failed' || state === 'disconnected') return 'bg-red-500';
-    if (state === 'connecting' || state === 'checking') return 'bg-yellow-500 animate-pulse';
-    return 'bg-gray-500';
+    if (state === "connected") return "bg-green-500";
+    if (state === "failed" || state === "disconnected") return "bg-red-500";
+    if (state === "connecting" || state === "checking")
+      return "bg-yellow-500 animate-pulse";
+    return "bg-gray-500";
   };
 
   return (
@@ -425,29 +447,31 @@ export default function RoomPage() {
       <Toast message="Link copied" isVisible={showToast} />
 
       <div className="absolute top-8 text-xs uppercase tracking-wide text-gray-400">
-        {isMobile ? "Viewer · Mobile" : isHost ? "Host · Desktop" : "Viewer"} · {status}
+        {isMobile ? "Viewer · Mobile" : isHost ? "Host · Desktop" : "Viewer"} ·{" "}
+        {status}
       </div>
 
       <div className="w-full max-w-6xl px-6 relative">
         <div className="aspect-video rounded-3xl bg-black/40 border border-white/10 overflow-hidden flex items-center justify-center relative">
-
           {isMobile && !hasRemoteStream && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-10">
               <div className="text-center max-w-xs px-6">
                 <p className="text-sm text-gray-300 mb-2">Viewing mode</p>
                 <p className="text-xs text-gray-400 leading-relaxed">
-                  Screen sharing is available on desktop browsers.
-                  Join from a desktop to host and share your screen.
+                  Screen sharing is available on desktop browsers. Join from a
+                  desktop to host and share your screen.
                 </p>
               </div>
             </div>
           )}
 
-          {status === "Waiting for host..." && !isMobile && !hasRemoteStream && (
-            <div className="absolute text-gray-400 text-sm">
-              Waiting for host to start sharing…
-            </div>
-          )}
+          {status === "Waiting for host..." &&
+            !isMobile &&
+            !hasRemoteStream && (
+              <div className="absolute text-gray-400 text-sm">
+                Waiting for host to start sharing…
+              </div>
+            )}
 
           <video
             ref={videoRef}
@@ -493,13 +517,15 @@ export default function RoomPage() {
           <button
             onClick={() => setShowStats(!showStats)}
             className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors relative ${
-              showStats ? 'bg-white/10' : 'hover:bg-white/10'
+              showStats ? "bg-white/10" : "hover:bg-white/10"
             }`}
             title="Connection stats"
           >
             <Activity size={18} />
             {/* Status indicator dot */}
-            <span className={`absolute top-2 right-2 w-2 h-2 rounded-full ${getStatusDot(debugInfo.conn)}`} />
+            <span
+              className={`absolute top-2 right-2 w-2 h-2 rounded-full ${getStatusDot(debugInfo.conn)}`}
+            />
           </button>
 
           {/* Stats Dropdown */}
@@ -514,56 +540,80 @@ export default function RoomPage() {
               >
                 <div className="flex items-center gap-2 mb-3 pb-3 border-b border-white/10">
                   <Activity size={14} className="text-primary" />
-                  <span className="text-sm font-semibold text-white">Connection Stats</span>
+                  <span className="text-sm font-semibold text-white">
+                    Connection Stats
+                  </span>
                 </div>
-                
+
                 <div className="space-y-2.5 font-mono text-xs">
                   <div className="flex justify-between items-center">
                     <span className="text-gray-400">Role</span>
-                    <span className="text-white font-semibold">{isHost ? 'Host' : 'Viewer'}</span>
+                    <span className="text-white font-semibold">
+                      {isHost ? "Host" : "Viewer"}
+                    </span>
                   </div>
-                  
+
                   <div className="flex justify-between items-center">
                     <span className="text-gray-400">Status</span>
                     <span className="text-white font-semibold">{status}</span>
                   </div>
-                  
+
                   <div className="flex justify-between items-center">
                     <span className="text-gray-400">Peer Connection</span>
                     <div className="flex items-center gap-2">
-                      <span className={`w-1.5 h-1.5 rounded-full ${getStatusDot(debugInfo.conn)}`} />
-                      <span className={`capitalize ${getStatusColor(debugInfo.conn)}`}>
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${getStatusDot(debugInfo.conn)}`}
+                      />
+                      <span
+                        className={`capitalize ${getStatusColor(debugInfo.conn)}`}
+                      >
                         {debugInfo.conn}
                       </span>
                     </div>
                   </div>
-                  
+
                   <div className="flex justify-between items-center">
                     <span className="text-gray-400">ICE Connection</span>
                     <div className="flex items-center gap-2">
-                      <span className={`w-1.5 h-1.5 rounded-full ${getStatusDot(debugInfo.ice)}`} />
-                      <span className={`capitalize ${getStatusColor(debugInfo.ice)}`}>
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${getStatusDot(debugInfo.ice)}`}
+                      />
+                      <span
+                        className={`capitalize ${getStatusColor(debugInfo.ice)}`}
+                      >
                         {debugInfo.ice}
                       </span>
                     </div>
                   </div>
-                  
+
                   <div className="flex justify-between items-center">
                     <span className="text-gray-400">Socket</span>
                     <div className="flex items-center gap-2">
-                      <span className={`w-1.5 h-1.5 rounded-full ${debugInfo.socket ? 'bg-green-500' : 'bg-red-500'}`} />
-                      <span className={debugInfo.socket ? 'text-green-400' : 'text-red-400'}>
-                        {debugInfo.socket ? 'Connected' : 'Disconnected'}
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${debugInfo.socket ? "bg-green-500" : "bg-red-500"}`}
+                      />
+                      <span
+                        className={
+                          debugInfo.socket ? "text-green-400" : "text-red-400"
+                        }
+                      >
+                        {debugInfo.socket ? "Connected" : "Disconnected"}
                       </span>
                     </div>
                   </div>
-                  
+
                   <div className="flex justify-between items-center">
                     <span className="text-gray-400">Video Stream</span>
                     <div className="flex items-center gap-2">
-                      <span className={`w-1.5 h-1.5 rounded-full ${hasRemoteStream ? 'bg-green-500' : 'bg-gray-500'}`} />
-                      <span className={hasRemoteStream ? 'text-green-400' : 'text-gray-400'}>
-                        {hasRemoteStream ? 'Active' : 'None'}
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${hasRemoteStream ? "bg-green-500" : "bg-gray-500"}`}
+                      />
+                      <span
+                        className={
+                          hasRemoteStream ? "text-green-400" : "text-gray-400"
+                        }
+                      >
+                        {hasRemoteStream ? "Active" : "None"}
                       </span>
                     </div>
                   </div>
