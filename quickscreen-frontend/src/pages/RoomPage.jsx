@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import socket from "../socket";
 import { Copy, MonitorUp, StopCircle, LogOut, Activity } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-import socket from "../socket";
+import { log as logger } from "../utils/logger";
 import Toast from "../components/ui/Toast";
 
 /* ---------------------------
@@ -37,12 +38,12 @@ const iceConfig = {
   iceTransportPolicy: "all",
 };
 
-// Debug logger
+// Use the imported logger with the same interface
 const log = {
-  i: (msg, data) => console.log(`🔵 ${msg}`, data || ""),
-  s: (msg, data) => console.log(`✅ ${msg}`, data || ""),
-  e: (msg, data) => console.error(`🔴 ${msg}`, data || ""),
-  w: (msg, data) => console.warn(`⚠️ ${msg}`, data || ""),
+  i: (msg, data) => logger.i(msg, data),
+  s: (msg, data) => logger.s(msg, data),
+  e: (msg, data) => logger.e(msg, data),
+  w: (msg, data) => logger.w(msg, data),
 };
 
 // Diagnostic Check
@@ -76,6 +77,8 @@ export default function RoomPage() {
     conn: "new",
     ice: "new",
     socket: false,
+    candidates: 0,
+    hasRelay: false,
   });
 
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -126,6 +129,11 @@ export default function RoomPage() {
     peer.onicecandidate = (e) => {
       if (e.candidate) {
         log.i("Sending ICE candidate", e.candidate.type);
+        setDebugInfo((prev) => ({
+          ...prev,
+          candidates: prev.candidates + 1,
+          hasRelay: prev.hasRelay || e.candidate.type === "relay",
+        }));
         socket.emit("signal", {
           roomId,
           signal: { candidate: e.candidate },
@@ -598,6 +606,38 @@ export default function RoomPage() {
                         }
                       >
                         {debugInfo.socket ? "Connected" : "Disconnected"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">TURN Config</span>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${import.meta.env.VITE_TURN_USERNAME ? "bg-green-500" : "bg-red-500"}`}
+                      />
+                      <span
+                        className={
+                          import.meta.env.VITE_TURN_USERNAME
+                            ? "text-green-400"
+                            : "text-red-400"
+                        }
+                      >
+                        {import.meta.env.VITE_TURN_USERNAME ? "Set" : "Missing"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">ICE Candidates</span>
+                    <div className="flex flex-col items-end">
+                      <span className="text-white">
+                        {debugInfo.candidates || 0} total
+                      </span>
+                      <span className="text-[10px] text-gray-500">
+                        {debugInfo.hasRelay
+                          ? "✓ Relay (TURN) active"
+                          : "⚠ No Relay (TURN)"}
                       </span>
                     </div>
                   </div>
