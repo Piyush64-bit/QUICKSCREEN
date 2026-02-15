@@ -1,31 +1,50 @@
-import winston from "winston";
+const logLevel = import.meta.env.VITE_LOG_LEVEL || "debug";
 
-// Browser-safe format
-const browserFormat = winston.format.printf(({ level, message, timestamp, ...metadata }) => {
-  let msg = `[${timestamp}] ${level.toUpperCase()}: ${message}`;
+const levels = {
+  error: 0,
+  warn: 1,
+  info: 2,
+  debug: 3,
+};
+
+const shouldLog = (level) => {
+  return levels[level] <= levels[logLevel];
+};
+
+const formatMessage = (level, message, data) => {
+  const timestamp = new Date().toLocaleTimeString();
+  const prefix = `[${timestamp}] ${level.toUpperCase()}:`;
   
-  if (Object.keys(metadata).length > 0) {
-    msg += ` ${JSON.stringify(metadata)}`;
+  if (data && Object.keys(data).length > 0) {
+    return [prefix, message, data];
   }
-  
-  return msg;
-});
+  return [prefix, message];
+};
 
-const logger = winston.createLogger({
-  level: import.meta.env.VITE_LOG_LEVEL || "debug",
-  format: winston.format.combine(
-    winston.format.timestamp({ format: "HH:mm:ss" }),
-    browserFormat
-  ),
-  transports: [
-    new winston.transports.Console({
-      consoleWarnLevels: ["warn"],
-      consoleErrorLevels: ["error"],
-    }),
-  ],
-});
+const logger = {
+  info: (msg, data) => {
+    if (shouldLog("info")) {
+      console.log(...formatMessage("info", msg, data));
+    }
+  },
+  warn: (msg, data) => {
+    if (shouldLog("warn")) {
+      console.warn(...formatMessage("warn", msg, data));
+    }
+  },
+  error: (msg, data) => {
+    if (shouldLog("error")) {
+      console.error(...formatMessage("error", msg, data));
+    }
+  },
+  debug: (msg, data) => {
+    if (shouldLog("debug")) {
+      console.debug(...formatMessage("debug", msg, data));
+    }
+  },
+};
 
-// Create a wrapper to mimic the previous 'log' object but with Winston
+// Create a wrapper to mimic the previous 'log' object
 export const log = {
   i: (msg, data) => logger.info(msg, data),
   s: (msg, data) => logger.info(`✅ ${msg}`, data), // Success (mapped to info)
