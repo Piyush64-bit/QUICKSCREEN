@@ -35,7 +35,7 @@ const iceConfig = {
     },
   ],
   iceCandidatePoolSize: 10,
-  iceTransportPolicy: "all",
+  iceTransportPolicy: "relay",
 };
 
 // Use the imported logger with the same interface
