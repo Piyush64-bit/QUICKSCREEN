@@ -126,6 +126,10 @@ export default function RoomPage() {
       log.i(`ICE gathering: ${peer.iceGatheringState}`);
     };
 
+    peer.onicecandidateerror = (e) => {
+      log.e(`ICE candidate error: ${e.errorCode} ${e.errorText} at ${e.url}`);
+    };
+
     peer.onicecandidate = (e) => {
       if (e.candidate) {
         log.i("Sending ICE candidate", e.candidate.type);
